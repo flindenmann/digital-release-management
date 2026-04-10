@@ -1,0 +1,6 @@
+# Inhalt .gitignore
+.env.local
+.env*.local
+node_modules/
+.next/
+backups/
