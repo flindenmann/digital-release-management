@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+# OpenSSL wird von Prisma benötigt
+RUN apk add --no-cache openssl
+
+WORKDIR /app
+
+# Abhängigkeiten zuerst installieren (besseres Layer-Caching)
+COPY package*.json ./
+RUN npm install
+
+# Quellcode kopieren
+COPY . .
+
+# Port für Next.js
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

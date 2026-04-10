@@ -1,6 +1,38 @@
-# Inhalt .gitignore
+# ─── Umgebungsvariablen ───────────────────────────────────────────────────────
 .env.local
 .env*.local
+.env
+
+# ─── Dependencies ─────────────────────────────────────────────────────────────
 node_modules/
+
+# ─── Next.js Build ────────────────────────────────────────────────────────────
 .next/
+out/
+
+# ─── Prisma ───────────────────────────────────────────────────────────────────
+# Generierte Prisma-Client-Dateien nicht einchecken (werden bei npm install erzeugt)
+# prisma/migrations/ wird eingecheckt!
+
+# ─── Backups ──────────────────────────────────────────────────────────────────
 backups/
+
+# ─── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ─── macOS ────────────────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V8
+.Trashes
+
+# ─── IDE ──────────────────────────────────────────────────────────────────────
+.idea/
+*.swp
+*.swo
+
+# ─── TypeScript ───────────────────────────────────────────────────────────────
+*.tsbuildinfo
+next-env.d.ts

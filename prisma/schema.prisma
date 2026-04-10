@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum ProjectRole {
+  RELEASE_MANAGER
+  SACHBEARBEITER
+  MANAGER
+}
+
+enum TaskStatus {
+  OPEN
+  PLANNED
+  DONE
+  ARCHIVED
+}
+
+enum MilestoneStatus {
+  OPEN
+  PLANNED
+  DONE
+  ARCHIVED
+}
+
+enum DependencyType {
+  FS // Finish-Start
+  SS // Start-Start
+  FF // Finish-Finish
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum AttachmentType {
+  UPLOAD
+  LINK
+}
+
+// ─── Core Entities ───────────────────────────────────────────────────────────
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  username           String   @unique
+  firstName          String
+  lastName           String
+  function           String?
+  phone              String?
+  passwordHash       String
+  mustChangePassword Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  projectUsers     ProjectUser[]
+  taskComments     TaskComment[]
+  auditLogs        AuditLog[]
+  tasksCreated     Task[]           @relation("TaskCreatedBy")
+  tasksUpdated     Task[]           @relation("TaskUpdatedBy")
+  globalResources  GlobalResource[]
+}
+
+model Team {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+
+  globalResources GlobalResource[]
+}
+
+model GlobalResource {
+  id        String   @id @default(cuid())
+  userId    String?
+  teamId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User?               @relation(fields: [userId], references: [id])
+  team              Team?               @relation(fields: [teamId], references: [id])
+  resourceSnapshots ResourceSnapshot[]
+}
+
+// Separate relation on User to avoid circular reference issues
+// GlobalResource.userId → User (optional: resource may not be a system user)
+// Defined here without back-relation on User to keep User model clean
+
+model GlobalApplication {
+  id          String   @id @default(cuid())
+  name        String
+  prefix      String   @unique // z.B. "SYR"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  applicationSnapshots ApplicationSnapshot[]
+}
+
+// ─── Release ─────────────────────────────────────────────────────────────────
+
+model Release {
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  milestoneCounter Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  projectUsers         ProjectUser[]
+  resourceSnapshots    ResourceSnapshot[]
+  applicationSnapshots ApplicationSnapshot[]
+  tasks                Task[]
+  milestones           Milestone[]
+}
+
+model ProjectUser {
+  id        String      @id @default(cuid())
+  releaseId String
+  userId    String
+  role      ProjectRole
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, userId])
+}
+
+// ─── Snapshots ───────────────────────────────────────────────────────────────
+
+model ResourceSnapshot {
+  id               String   @id @default(cuid())
+  releaseId        String
+  globalResourceId String
+  firstName        String
+  lastName         String
+  email            String
+  phone            String?
+  function         String?
+  teamName         String?
+  createdAt        DateTime @default(now())
+
+  release        Release        @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  globalResource GlobalResource @relation(fields: [globalResourceId], references: [id])
+
+  taskAssignees         TaskAssignee[]
+  responsibleMilestones Milestone[]   @relation("MilestoneResponsible")
+
+  @@unique([releaseId, globalResourceId])
+}
+
+model ApplicationSnapshot {
+  id                  String   @id @default(cuid())
+  releaseId           String
+  globalApplicationId String
+  name                String
+  prefix              String
+  description         String?
+  createdAt           DateTime @default(now())
+
+  // Laufende Tasknummer pro Snapshot (für Key-Generierung)
+  taskCounter Int @default(0)
+
+  release           Release           @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  globalApplication GlobalApplication @relation(fields: [globalApplicationId], references: [id])
+
+  tasks      Task[]
+  milestones Milestone[]
+
+  @@unique([releaseId, globalApplicationId])
+}
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+
+model Task {
+  id                    String     @id @default(cuid())
+  releaseId             String
+  applicationSnapshotId String
+  key                   String     // z.B. "SYR-0042", auto-generiert
+  title                 String
+  description           String?
+  status                TaskStatus @default(OPEN)
+  isMilestone           Boolean    @default(false) // true = Meilenstein (Start=Ende, Dauer 0)
+  isSummaryTask         Boolean    @default(false) // true = Sammeltask (Start/Ende aus Kinder berechnet)
+  parentTaskId          String?                    // FK zu übergeordnetem Sammeltask
+  startAt               DateTime?
+  endAt                 DateTime?
+  durationMinutes       Int?      // gesetzt wenn Zeitplanung via Vorgänger+Dauer
+  createdById           String
+  updatedById           String?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+  version               Int        @default(1)
+
+  release             Release             @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  applicationSnapshot ApplicationSnapshot @relation(fields: [applicationSnapshotId], references: [id])
+  createdBy           User                @relation("TaskCreatedBy", fields: [createdById], references: [id])
+  updatedBy           User?               @relation("TaskUpdatedBy", fields: [updatedById], references: [id])
+  parentTask          Task?               @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  childTasks          Task[]              @relation("TaskHierarchy")
+
+  assignees              TaskAssignee[]
+  attachments            TaskAttachment[]
+  comments               TaskComment[]
+  predecessors           TaskDependency[]          @relation("SuccessorTask")
+  successors             TaskDependency[]          @relation("PredecessorTask")
+  milestoneDeps          MilestoneDependency[]
+  milestonePredecessors  TaskMilestoneDependency[]
+
+  @@unique([releaseId, key])
+  @@index([releaseId, status])
+  @@index([applicationSnapshotId])
+  @@index([parentTaskId])
+}
+
+model TaskAssignee {
+  id                 String @id @default(cuid())
+  taskId             String
+  resourceSnapshotId String
+
+  task             Task             @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  resourceSnapshot ResourceSnapshot @relation(fields: [resourceSnapshotId], references: [id])
+
+  @@unique([taskId, resourceSnapshotId])
+}
+
+model TaskDependency {
+  id            String         @id @default(cuid())
+  predecessorId String
+  successorId   String
+  type          DependencyType @default(FS)
+
+  predecessor Task @relation("PredecessorTask", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   Task @relation("SuccessorTask", fields: [successorId], references: [id], onDelete: Cascade)
+
+  @@unique([predecessorId, successorId])
+}
+
+model TaskMilestoneDependency {
+  id          String         @id @default(cuid())
+  taskId      String
+  milestoneId String
+  type        DependencyType @default(FS)
+
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  milestone Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, milestoneId])
+  @@index([taskId])
+}
+
+model TaskAttachment {
+  id         String         @id @default(cuid())
+  taskId     String
+  name       String
+  url        String
+  storageKey String?        // nur bei UPLOAD gesetzt
+  type       AttachmentType
+  createdAt  DateTime       @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Milestones ──────────────────────────────────────────────────────────────
+
+model Milestone {
+  id                    String          @id @default(cuid())
+  releaseId             String
+  applicationSnapshotId String
+  key                   String          // z.B. "MS-0001", auto-generiert
+  title                 String
+  description           String?
+  dateTime              DateTime
+  isFixed               Boolean         @default(false)
+  status                MilestoneStatus @default(OPEN)
+  responsibleId         String?
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  version               Int             @default(1)
+
+  release             Release             @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  applicationSnapshot ApplicationSnapshot @relation(fields: [applicationSnapshotId], references: [id])
+  responsible         ResourceSnapshot?   @relation("MilestoneResponsible", fields: [responsibleId], references: [id])
+
+  predecessors       MilestoneDependency[]     @relation("SuccessorMilestone")
+  successors         MilestoneDependency[]     @relation("PredecessorMilestone")
+  taskSuccessors     TaskMilestoneDependency[]
+
+  @@unique([releaseId, key])
+  @@index([releaseId, status])
+  @@index([applicationSnapshotId])
+}
+
+model MilestoneDependency {
+  id                      String         @id @default(cuid())
+  milestoneId             String
+  taskId                  String?
+  predecessorMilestoneId  String?
+  type                    DependencyType @default(FS)
+
+  milestone           Milestone  @relation("SuccessorMilestone", fields: [milestoneId], references: [id], onDelete: Cascade)
+  task                Task?      @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  predecessorMilestone Milestone? @relation("PredecessorMilestone", fields: [predecessorMilestoneId], references: [id], onDelete: SetNull)
+}
+
+// ─── Audit Log ───────────────────────────────────────────────────────────────
+
+model AuditLog {
+  id            String      @id @default(cuid())
+  entity        String      // z.B. "Task", "Milestone", "User"
+  entityId      String
+  action        AuditAction
+  userId        String
+  changedFields Json        @default("[]") // string[]
+  oldValues     Json?       // Record<string, unknown>
+  newValues     Json?       // Record<string, unknown>
+  createdAt     DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}
