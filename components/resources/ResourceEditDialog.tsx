@@ -12,13 +12,14 @@ import { Label }    from "@/components/ui/label";
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
 export interface ResourceSnapshot {
-  id:        string;
-  firstName: string;
-  lastName:  string;
-  email:     string;
-  phone?:    string | null;
-  function?: string | null;
-  teamName?: string | null;
+  id:               string;
+  globalResourceId: string;
+  firstName:        string;
+  lastName:         string;
+  email:            string;
+  phone?:           string | null;
+  function?:        string | null;
+  teamName?:        string | null;
 }
 
 interface ResourceEditDialogProps {

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TaskStatus } from "@prisma/client";
-import { AlertTriangle, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, Plus, RefreshCw, ArrowRightToLine, ArrowLeftToLine, MessageSquare } from "lucide-react";
 import { useTasks } from "@/hooks/useTasks";
 import { useRelease } from "@/hooks/useRelease";
 import { TaskCard } from "@/components/tasks/TaskCard";
@@ -456,9 +456,12 @@ export default function TasksPage({ params }: TasksPageProps) {
               <col className="w-[55px]" />
               <col className="w-[55px]" />
               <col className="w-[70px]" />
-              <col className="w-[280px]" />
-              <col className="w-[170px]" />
-              <col className="w-[170px]" />
+              <col /> {/* Titel: flexibel */}
+              <col className="w-[40px]" />
+              <col className="w-[40px]" />
+              <col className="w-[40px]" />
+              <col className="w-[150px]" />
+              <col className="w-[160px]" />
               <col className="w-[95px]" />
             </colgroup>
             <thead>
@@ -469,6 +472,9 @@ export default function TasksPage({ params }: TasksPageProps) {
                 <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Ende</th>
                 <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Dauer</th>
                 <th className="py-2 px-3 text-left font-medium">Titel</th>
+                <th className="py-2 px-3 text-center font-medium" title="Vorgänger"><ArrowRightToLine className="h-3.5 w-3.5 mx-auto" /></th>
+                <th className="py-2 px-3 text-center font-medium" title="Nachfolger"><ArrowLeftToLine className="h-3.5 w-3.5 mx-auto" /></th>
+                <th className="py-2 px-3 text-center font-medium" title="Kommentare"><MessageSquare className="h-3.5 w-3.5 mx-auto" /></th>
                 <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Applikation</th>
                 <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Verantwortliche</th>
                 <th className="py-2 px-3 text-left font-medium whitespace-nowrap">Status</th>
@@ -500,6 +506,8 @@ export default function TasksPage({ params }: TasksPageProps) {
         open={dialogOpen}
         onClose={handleDialogClose}
         task={editingTask}
+        currentUserId={session?.user?.id}
+        canEdit={currentUserRole ? can(currentUserRole, "task:edit") : false}
       />
     </main>
   );

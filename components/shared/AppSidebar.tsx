@@ -46,14 +46,14 @@ export function AppSidebar({ user }: AppSidebarProps) {
           <p className="px-2 mb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
             Admin
           </p>
-          <NavItem href="/admin/users" active={pathname.startsWith("/admin/users")}>
-            Benutzer
-          </NavItem>
           <NavItem href="/admin/applications" active={pathname.startsWith("/admin/applications")}>
             Applikationen
           </NavItem>
           <NavItem href="/admin/resources" active={pathname.startsWith("/admin/resources")}>
             Ressourcen
+          </NavItem>
+          <NavItem href="/admin/teams" active={pathname.startsWith("/admin/teams")}>
+            Teams
           </NavItem>
         </div>
       </nav>

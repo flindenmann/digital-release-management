@@ -41,8 +41,7 @@ export const GET = withErrorHandling(async (req: NextRequest, { params }) => {
             assignees: {
               some: {
                 resourceSnapshot: {
-                  // ResourceSnapshot via email mit aktuellem User verknüpfen
-                  email: session.user.email!,
+                  globalResource: { userId: session.user.id },
                 },
               },
             },
@@ -63,7 +62,13 @@ export const GET = withErrorHandling(async (req: NextRequest, { params }) => {
         select: {
           type: true,
           predecessorId: true,
-          predecessor: { select: { id: true, startAt: true, endAt: true } },
+          predecessor: { select: { id: true, key: true, startAt: true, endAt: true } },
+        },
+      },
+      successors: {
+        select: {
+          successorId: true,
+          successor: { select: { id: true, key: true } },
         },
       },
     },
@@ -111,7 +116,7 @@ export const POST = withErrorHandling(async (req: NextRequest, { params }) => {
       ...(assigneeIds?.length
         ? {
             assignees: {
-              create: assigneeIds.map((resourceSnapshotId) => ({
+              create: assigneeIds.map((resourceSnapshotId: string) => ({
                 resourceSnapshotId,
               })),
             },

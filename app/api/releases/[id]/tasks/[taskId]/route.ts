@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
 import { UnauthorizedError, NotFoundError, ForbiddenError, ConflictError, ValidationError } from "@/lib/errors";
 import { logAudit } from "@/lib/audit";
-import { can } from "@/lib/permissions";
+import { can, canViewAllTasks } from "@/lib/permissions";
 import { UpdateTaskSchema } from "@/lib/validations/task";
 
 async function getTaskAndRole(releaseId: string, taskId: string, userId: string) {
@@ -18,6 +18,16 @@ async function getTaskAndRole(releaseId: string, taskId: string, userId: string)
     where: { id: taskId, releaseId },
   });
   if (!task) throw new NotFoundError("Task");
+
+  if (!canViewAllTasks(projectUser.role)) {
+    const isAssigned = await prisma.taskAssignee.findFirst({
+      where: {
+        taskId,
+        resourceSnapshot: { globalResource: { userId } },
+      },
+    });
+    if (!isAssigned) throw new ForbiddenError();
+  }
 
   return { task, role: projectUser.role };
 }

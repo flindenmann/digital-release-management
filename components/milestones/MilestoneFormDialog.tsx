@@ -13,6 +13,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
 import { X } from "lucide-react";
+import { HistoryPanel } from "@/components/shared/HistoryPanel";
+
+const MILESTONE_FIELD_LABELS: Record<string, string> = {
+  title: "Titel",
+  dateTime: "Datum/Zeit",
+  status: "Status",
+  isFixed: "Fixiert",
+  description: "Beschreibung",
+  responsibleId: "Verantwortlich",
+};
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -595,6 +605,13 @@ export function MilestoneFormDialog({
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
+          )}
+
+          {isEdit && milestone && (
+            <HistoryPanel
+              historyUrl={`/api/releases/${releaseId}/milestones/${milestone.id}/history`}
+              fieldLabels={MILESTONE_FIELD_LABELS}
+            />
           )}
 
           <div className="flex justify-between gap-2 pt-2">

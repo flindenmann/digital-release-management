@@ -433,7 +433,7 @@ npx prisma migrate dev
 npm run dev
 
 # Prisma Studio (DB-Browser)
-npx prisma studio
+npx prisma studio --hostname 0.0.0.0
 
 # Type-Check
 npm run typecheck
@@ -462,6 +462,7 @@ services:
       dockerfile: Dockerfile.dev
     ports:
       - "3000:3000"
+      - "5555:5555"             # Prisma Studio
     volumes:
       - .:/app
       - /app/node_modules       # node_modules nicht überschreiben
@@ -555,7 +556,7 @@ docker compose -f docker-compose.dev.yml logs -f app   # Logs
 
 # Prisma
 docker compose -f docker-compose.dev.yml exec app npx prisma migrate dev    # neue Migration
-docker compose -f docker-compose.dev.yml exec app npx prisma studio         # DB-Browser (Port 5555)
+docker compose -f docker-compose.dev.yml exec app npx prisma studio --hostname 0.0.0.0  # DB-Browser (Port 5555)
 
 # Shell im App-Container
 docker compose -f docker-compose.dev.yml exec app sh

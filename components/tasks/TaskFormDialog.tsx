@@ -13,6 +13,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Combobox } from "@/components/ui/combobox";
 import { X } from "lucide-react";
+import { HistoryPanel } from "@/components/shared/HistoryPanel";
+import { TaskComments } from "@/components/tasks/TaskComments";
+import { TaskAttachments } from "@/components/tasks/TaskAttachments";
+
+const TASK_FIELD_LABELS: Record<string, string> = {
+  title: "Titel",
+  status: "Status",
+  startAt: "Start",
+  endAt: "Ende",
+  durationMinutes: "Dauer (Min.)",
+  description: "Beschreibung",
+  isMilestone: "Meilenstein",
+  isSummaryTask: "Sammeltask",
+  parentTaskId: "Übergeordneter Task",
+};
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
 
@@ -57,6 +72,14 @@ interface SavedMilestoneDep {
   milestone: { key: string; title: string; dateTime: string };
 }
 
+// Nachfolger: Tasks die diesen Task als Vorgänger haben
+interface SavedSuccessor {
+  id: string;
+  successorId: string;
+  type: DependencyType;
+  successor: { id: string; key: string; title: string; status: TaskStatus };
+}
+
 // Gepufferte Abhängigkeit für neue Tasks (vor dem ersten Speichern)
 interface PendingDep {
   predecessorId: string;
@@ -70,6 +93,10 @@ interface TaskFormDialogProps {
   onClose: () => void;
   /** Wenn true und kein task angegeben: Meilenstein-Checkbox ist vorausgewählt */
   defaultIsMilestone?: boolean;
+  /** ID des eingeloggten Users — für Kommentar-Aktionen */
+  currentUserId?: string;
+  /** Ob der eingeloggte User task:edit-Berechtigung hat */
+  canEdit?: boolean;
   task?: {
     id: string;
     title: string;
@@ -165,6 +192,8 @@ export function TaskFormDialog({
   open,
   onClose,
   defaultIsMilestone = false,
+  currentUserId,
+  canEdit = true,
   task,
 }: TaskFormDialogProps) {
   const queryClient = useQueryClient();
@@ -192,6 +221,7 @@ export function TaskFormDialog({
   // Abhängigkeiten (Edit: sofort gespeichert; Create: gepuffert)
   const [savedTaskDeps, setSavedTaskDeps]           = useState<SavedTaskDep[]>([]);
   const [savedMilestoneDeps, setSavedMilestoneDeps] = useState<SavedMilestoneDep[]>([]);
+  const [savedSuccessors, setSavedSuccessors]       = useState<SavedSuccessor[]>([]);
   const [pendingDeps, setPendingDeps]               = useState<PendingDep[]>([]);
   const [newDepId, setNewDepId]                     = useState<string[]>([]);
   const [newDepType, setNewDepType]                 = useState<DependencyType>("FS");
@@ -225,6 +255,7 @@ export function TaskFormDialog({
       .then((d) => {
         setSavedTaskDeps(d.data?.taskPredecessors ?? []);
         setSavedMilestoneDeps(d.data?.milestonePredecessors ?? []);
+        setSavedSuccessors(d.data?.successors ?? []);
       });
   }, [open, isEdit, task, releaseId]);
 
@@ -257,6 +288,7 @@ export function TaskFormDialog({
       setDurationInput("");
       setSavedTaskDeps([]);
       setSavedMilestoneDeps([]);
+      setSavedSuccessors([]);
       setPendingDeps([]);
     }
     setNewDepId([]);
@@ -630,7 +662,7 @@ export function TaskFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[38rem] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
         </DialogHeader>
@@ -927,10 +959,56 @@ export function TaskFormDialog({
             {depError && <p className="text-xs text-destructive">{depError}</p>}
           </div>
 
+          {/* ── Nachfolger (nur Lesezugriff, nur Edit) ──────────────────── */}
+          {isEdit && savedSuccessors.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">Nachfolger</Label>
+              {savedSuccessors.map((dep) => (
+                <div
+                  key={dep.id}
+                  className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-1.5 text-sm"
+                >
+                  <span className="font-mono text-xs text-muted-foreground shrink-0">{dep.successor.key}</span>
+                  <span className="flex-1 truncate">{dep.successor.title}</span>
+                  <Badge variant="secondary" className="text-xs shrink-0">{dep.type}</Badge>
+                </div>
+              ))}
+            </div>
+          )}
+
           {error && (
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {error}
             </p>
+          )}
+
+          {isEdit && task && (
+            <>
+              {/* Anhänge */}
+              <div className="rounded-md border p-3">
+                <TaskAttachments
+                  releaseId={releaseId}
+                  taskId={task.id}
+                  canEdit={canEdit}
+                />
+              </div>
+
+              {/* Kommentare */}
+              <div className="rounded-md border p-3">
+                <TaskComments
+                  releaseId={releaseId}
+                  taskId={task.id}
+                  currentUserId={currentUserId ?? ""}
+                  canEdit={canEdit}
+                />
+              </div>
+
+              {/* Verlauf */}
+              <HistoryPanel
+                historyUrl={`/api/releases/${releaseId}/tasks/${task.id}/history`}
+                fieldLabels={TASK_FIELD_LABELS}
+              />
+            </>
           )}
 
           <div className="flex justify-end gap-2 pt-2">

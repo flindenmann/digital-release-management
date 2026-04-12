@@ -9,26 +9,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2, Download, Upload, CheckCircle2, XCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Users, Download, Upload, CheckCircle2, XCircle } from "lucide-react";
 import Papa from "papaparse";
 
-interface GlobalApplication {
+interface Team {
   id: string;
   name: string;
-  prefix: string;
   description?: string | null;
-  _count: { applicationSnapshots: number };
+  _count: { globalResources: number };
 }
 
 // ─── CSV Export ───────────────────────────────────────────────────────────────
 
-function exportCsv(applications: GlobalApplication[]) {
+function exportCsv(teams: Team[]) {
   const csv = Papa.unparse(
-    applications.map((a) => ({
-      prefix: a.prefix,
-      name: a.name,
-      description: a.description ?? "",
+    teams.map((t) => ({
+      name: t.name,
+      description: t.description ?? "",
     })),
     { header: true }
   );
@@ -36,18 +33,21 @@ function exportCsv(applications: GlobalApplication[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "applikationen.csv";
+  a.download = "teams.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
 
 function downloadTemplate() {
-  const csv = Papa.unparse([{ prefix: "SYR", name: "Beispiel Applikation", description: "Optionale Beschreibung" }], { header: true });
+  const csv = Papa.unparse(
+    [{ name: "Team A", description: "Optionale Beschreibung" }],
+    { header: true }
+  );
   const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "applikationen_vorlage.csv";
+  a.download = "teams_vorlage.csv";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -102,7 +102,6 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
         setRows(result.data);
       },
     });
-    // Reset so same file can be selected again
     e.target.value = "";
   }
 
@@ -110,14 +109,15 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
     if (rows.length === 0) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/applications/import", {
+      const res = await fetch("/api/admin/teams/import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rows }),
       });
       const data = await res.json();
       setResults(data.results ?? []);
-      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams-full"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
     } finally {
       setLoading(false);
     }
@@ -130,15 +130,14 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Applikationen importieren</DialogTitle>
+          <DialogTitle>Teams importieren</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 mt-2">
-          {/* Vorlage */}
           <div className="flex items-center justify-between rounded-md border bg-muted/40 px-3 py-2">
             <div>
               <p className="text-sm font-medium">CSV-Vorlage</p>
-              <p className="text-xs text-muted-foreground">Spalten: prefix, name, description</p>
+              <p className="text-xs text-muted-foreground">Spalten: name, description</p>
             </div>
             <Button variant="outline" size="sm" onClick={downloadTemplate}>
               <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -146,7 +145,6 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
             </Button>
           </div>
 
-          {/* Datei auswählen */}
           <div>
             <input
               ref={fileInputRef}
@@ -170,7 +168,6 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
             <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{parseError}</p>
           )}
 
-          {/* Vorschau */}
           {rows.length > 0 && !results && (
             <div className="rounded-md border bg-muted/30 px-3 py-2">
               <p className="text-sm text-muted-foreground">
@@ -178,14 +175,13 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
               </p>
               <div className="mt-1 max-h-32 overflow-y-auto text-xs text-muted-foreground space-y-0.5">
                 {rows.slice(0, 5).map((r, i) => (
-                  <p key={i} className="truncate">{r.prefix} — {r.name}</p>
+                  <p key={i} className="truncate">{r.name}</p>
                 ))}
                 {rows.length > 5 && <p>…und {rows.length - 5} weitere</p>}
               </div>
             </div>
           )}
 
-          {/* Ergebnisse */}
           {results && (
             <div className="space-y-2">
               <div className="flex gap-4 text-sm">
@@ -228,32 +224,30 @@ function ImportDialog({ open, onClose }: ImportDialogProps) {
   );
 }
 
-// ─── Formular-Dialog ──────────────────────────────────────────────────────────
+// ─── Team Dialog ──────────────────────────────────────────────────────────────
 
-interface AppDialogProps {
+interface TeamDialogProps {
   open: boolean;
   onClose: () => void;
-  app?: GlobalApplication | null;
+  team?: Team | null;
 }
 
-function AppDialog({ open, onClose, app }: AppDialogProps) {
+function TeamDialog({ open, onClose, team }: TeamDialogProps) {
   const queryClient = useQueryClient();
-  const isEdit = Boolean(app);
+  const isEdit = Boolean(team);
 
   const [name, setName] = useState("");
-  const [prefix, setPrefix] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (open) {
-      setName(app?.name ?? "");
-      setPrefix(app?.prefix ?? "");
-      setDescription(app?.description ?? "");
+      setName(team?.name ?? "");
+      setDescription(team?.description ?? "");
       setError("");
     }
-  }, [open, app]);
+  }, [open, team]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -261,18 +255,13 @@ function AppDialog({ open, onClose, app }: AppDialogProps) {
     setLoading(true);
 
     try {
-      const url = isEdit
-        ? `/api/admin/applications/${app!.id}`
-        : "/api/admin/applications";
+      const url = isEdit ? `/api/admin/teams/${team!.id}` : "/api/admin/teams";
       const method = isEdit ? "PATCH" : "POST";
-
-      const body: Record<string, unknown> = { name, description: description || undefined };
-      if (!isEdit) body.prefix = prefix;
 
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ name, description: description || null }),
       });
 
       if (!res.ok) {
@@ -281,7 +270,8 @@ function AppDialog({ open, onClose, app }: AppDialogProps) {
         return;
       }
 
-      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams-full"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
       onClose();
     } finally {
       setLoading(false);
@@ -292,45 +282,26 @@ function AppDialog({ open, onClose, app }: AppDialogProps) {
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Applikation bearbeiten" : "Neue Applikation"}</DialogTitle>
+          <DialogTitle>{isEdit ? "Team bearbeiten" : "Neues Team"}</DialogTitle>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          {!isEdit && (
-            <div className="space-y-2">
-              <Label htmlFor="prefix">Prefix *</Label>
-              <Input
-                id="prefix"
-                required
-                value={prefix}
-                onChange={(e) => setPrefix(e.target.value.toUpperCase())}
-                placeholder="z.B. SYR"
-                maxLength={10}
-                pattern="[A-Z0-9]+"
-                title="Nur Grossbuchstaben und Ziffern erlaubt"
-              />
-              <p className="text-xs text-muted-foreground">
-                Wird für Task-Nummern verwendet (z.B. SYR-0001). Nicht änderbar nach Erstellung.
-              </p>
-            </div>
-          )}
-
           <div className="space-y-2">
-            <Label htmlFor="name">Name *</Label>
+            <Label htmlFor="team-name">Name *</Label>
             <Input
-              id="name"
+              id="team-name"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Applikationsname"
+              placeholder="Teamname"
               maxLength={100}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Beschreibung</Label>
+            <Label htmlFor="team-description">Beschreibung</Label>
             <Textarea
-              id="description"
+              id="team-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optionale Beschreibung…"
@@ -360,50 +331,51 @@ function AppDialog({ open, onClose, app }: AppDialogProps) {
 
 // ─── Hauptseite ───────────────────────────────────────────────────────────────
 
-export default function AdminApplicationsPage() {
+export default function AdminTeamsPage() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editApp, setEditApp] = useState<GlobalApplication | null>(null);
+  const [editTeam, setEditTeam] = useState<Team | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
-  const { data, isLoading, isError } = useQuery<{ data: GlobalApplication[] }>({
-    queryKey: ["admin-applications"],
+  const { data, isLoading, isError } = useQuery<{ data: Team[] }>({
+    queryKey: ["admin-teams-full"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/applications");
-      if (!res.ok) throw new Error("Fehler beim Laden der Applikationen.");
+      const res = await fetch("/api/admin/teams");
+      if (!res.ok) throw new Error("Fehler beim Laden der Teams.");
       return res.json();
     },
   });
 
-  const applications = data?.data ?? [];
+  const teams = data?.data ?? [];
 
   function openCreate() {
-    setEditApp(null);
+    setEditTeam(null);
     setDialogOpen(true);
   }
 
-  function openEdit(app: GlobalApplication) {
-    setEditApp(app);
+  function openEdit(team: Team) {
+    setEditTeam(team);
     setDialogOpen(true);
   }
 
-  async function handleDelete(app: GlobalApplication) {
-    if (app._count.applicationSnapshots > 0) {
+  async function handleDelete(team: Team) {
+    if (team._count.globalResources > 0) {
       setDeleteError(
-        `"${app.name}" ist ${app._count.applicationSnapshots} Release(s) zugewiesen und kann nicht gelöscht werden.`
+        `"${team.name}" ist ${team._count.globalResources} Ressource(n) zugewiesen und kann nicht gelöscht werden.`
       );
       return;
     }
-    if (!confirm(`Applikation "${app.name}" wirklich löschen?`)) return;
+    if (!confirm(`Team "${team.name}" wirklich löschen?`)) return;
 
     setDeleteError("");
-    const res = await fetch(`/api/admin/applications/${app.id}`, { method: "DELETE" });
+    const res = await fetch(`/api/admin/teams/${team.id}`, { method: "DELETE" });
     if (!res.ok) {
       const d = await res.json();
       setDeleteError(d.error?.message ?? "Löschen fehlgeschlagen.");
     } else {
-      queryClient.invalidateQueries({ queryKey: ["admin-applications"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams-full"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-teams"] });
     }
   }
 
@@ -411,13 +383,13 @@ export default function AdminApplicationsPage() {
     <main className="p-6 max-w-4xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Applikationen</h1>
+          <h1 className="text-2xl font-bold">Teams</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Globale Applikationsliste — wird bei Release-Erstellung zugewiesen
+            Globale Teamliste — wird Ressourcen zugewiesen
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => exportCsv(applications)} disabled={applications.length === 0}>
+          <Button variant="outline" onClick={() => exportCsv(teams)} disabled={teams.length === 0}>
             <Download className="mr-2 h-4 w-4" />
             Export CSV
           </Button>
@@ -427,7 +399,7 @@ export default function AdminApplicationsPage() {
           </Button>
           <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
-            Neue Applikation
+            Neues Team
           </Button>
         </div>
       </div>
@@ -448,39 +420,39 @@ export default function AdminApplicationsPage() {
 
       {isError && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-          Fehler beim Laden der Applikationen.
+          Fehler beim Laden der Teams.
         </div>
       )}
 
-      {!isLoading && !isError && applications.length === 0 && (
+      {!isLoading && !isError && teams.length === 0 && (
         <div className="rounded-lg border border-dashed p-12 text-center">
-          <p className="text-muted-foreground">Noch keine Applikationen erfasst.</p>
+          <p className="text-muted-foreground">Noch keine Teams erfasst.</p>
           <Button variant="outline" className="mt-4" onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
-            Erste Applikation erstellen
+            Erstes Team erstellen
           </Button>
         </div>
       )}
 
-      {!isLoading && !isError && applications.length > 0 && (
+      {!isLoading && !isError && teams.length > 0 && (
         <div className="rounded-lg border divide-y">
-          {applications.map((app) => (
-            <div key={app.id} className="flex items-center gap-4 px-4 py-3">
-              <Badge variant="outline" className="font-mono shrink-0 text-xs px-2">
-                {app.prefix}
-              </Badge>
+          {teams.map((team) => (
+            <div key={team.id} className="flex items-center gap-4 px-4 py-3">
+              <div className="shrink-0 h-9 w-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                <Users className="h-4 w-4" />
+              </div>
 
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm">{app.name}</p>
-                {app.description && (
-                  <p className="text-xs text-muted-foreground truncate">{app.description}</p>
+                <p className="font-medium text-sm">{team.name}</p>
+                {team.description && (
+                  <p className="text-xs text-muted-foreground truncate">{team.description}</p>
                 )}
               </div>
 
               <span className="text-xs text-muted-foreground shrink-0">
-                {app._count.applicationSnapshots === 0
-                  ? "Kein Release"
-                  : `${app._count.applicationSnapshots} Release${app._count.applicationSnapshots !== 1 ? "s" : ""}`}
+                {team._count.globalResources === 0
+                  ? "Keine Ressourcen"
+                  : `${team._count.globalResources} Ressource${team._count.globalResources !== 1 ? "n" : ""}`}
               </span>
 
               <div className="flex gap-1 shrink-0">
@@ -488,7 +460,7 @@ export default function AdminApplicationsPage() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8"
-                  onClick={() => openEdit(app)}
+                  onClick={() => openEdit(team)}
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -496,8 +468,8 @@ export default function AdminApplicationsPage() {
                   variant="ghost"
                   size="icon"
                   className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => handleDelete(app)}
-                  disabled={app._count.applicationSnapshots > 0}
+                  onClick={() => handleDelete(team)}
+                  disabled={team._count.globalResources > 0}
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -507,10 +479,10 @@ export default function AdminApplicationsPage() {
         </div>
       )}
 
-      <AppDialog
+      <TeamDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        app={editApp}
+        team={editTeam}
       />
       <ImportDialog
         open={importOpen}

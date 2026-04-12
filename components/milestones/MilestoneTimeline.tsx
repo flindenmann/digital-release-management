@@ -1,6 +1,6 @@
 "use client";
 
-import { format, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import { AlertTriangle } from "lucide-react";
 
 // ─── Typen ────────────────────────────────────────────────────────────────────
@@ -27,7 +27,6 @@ const STATUS_STYLE: Record<string, { fill: string; stroke: string; textColor: st
   OPEN:     { fill: "#e5e7eb", stroke: "#9ca3af", textColor: "#6b7280", label: "Offen" },
   PLANNED:  { fill: "#fef9c3", stroke: "#eab308", textColor: "#854d0e", label: "Geplant" },
   DONE:     { fill: "#dcfce7", stroke: "#22c55e", textColor: "#166534", label: "Erledigt" },
-  ARCHIVED: { fill: "#f3f4f6", stroke: "#d1d5db", textColor: "#9ca3af", label: "Archiviert" },
 };
 
 // ─── Hilfsfunktionen ──────────────────────────────────────────────────────────
@@ -51,7 +50,7 @@ const CONTAINER_H = LINE_Y + DATE_AREA_H + BELOW_CONNECTOR + LABEL_HEIGHT + 12;
 
 export function MilestoneTimeline({ milestones, onMilestoneClick }: MilestoneTimelineProps) {
   const sorted = [...milestones]
-    .filter((m) => m.startAt)
+    .filter((m) => m.startAt && m.status !== "ARCHIVED")
     .sort((a, b) => new Date(a.startAt!).getTime() - new Date(b.startAt!).getTime());
 
   if (sorted.length === 0) {
@@ -62,42 +61,32 @@ export function MilestoneTimeline({ milestones, onMilestoneClick }: MilestoneTim
     );
   }
 
-  // ── Zeitspanne berechnen ──────────────────────────────────────────────────
+  // ── Zeitspanne berechnen: 3 Tage ab frühestem Start - 1 Tag ─────────────
 
-  const minTs = new Date(sorted[0].startAt!).getTime();
-  const maxTs = new Date(sorted[sorted.length - 1].startAt!).getTime();
-  const rangeDays = Math.max(differenceInDays(new Date(maxTs), new Date(minTs)), 1);
-  const padDays = Math.max(Math.ceil(rangeDays * 0.08), 3);
-  const startTs = minTs - padDays * 86_400_000;
-  const endTs = maxTs + padDays * 86_400_000;
+  const minTs  = new Date(sorted[0].startAt!).getTime();
+  const startTs = minTs - 1 * 86_400_000;          // frühester Start − 1 Tag
+  const endTs   = startTs + 3 * 86_400_000;         // + 3 Tage festes Fenster
   const totalMs = endTs - startTs;
 
   function xPct(dateStr: string): number {
     return clamp(((new Date(dateStr).getTime() - startTs) / totalMs) * 100, 0, 100);
   }
 
-  // ── Tick-Beschriftungen ───────────────────────────────────────────────────
-
-  const totalDays = Math.ceil((endTs - startTs) / 86_400_000);
-  const tickEvery =
-    totalDays <= 7   ? 1 :
-    totalDays <= 30  ? 7 :
-    totalDays <= 90  ? 14 :
-    totalDays <= 365 ? 30 : 90;
+  // ── Tick-Beschriftungen: 1 Tick pro Tag (4 Ticks) ────────────────────────
 
   const ticks: number[] = [];
   let cur = startTs;
   while (cur <= endTs) {
     ticks.push(cur);
-    cur += tickEvery * 86_400_000;
+    cur += 86_400_000; // 1 Tag
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="rounded-lg border bg-background overflow-x-auto">
+    <div className="rounded-lg border bg-background">
       {/* ── Haupt-Timeline-Bereich ─────────────────────────────────────── */}
-      <div className="relative min-w-[620px] px-4" style={{ height: `${CONTAINER_H}px` }}>
+      <div className="relative w-full px-4" style={{ height: `${CONTAINER_H}px` }}>
 
         {/* Tick-Linien (vertikal, subtil) */}
         {ticks.map((ts, i) => (
@@ -176,7 +165,7 @@ export function MilestoneTimeline({ milestones, onMilestoneClick }: MilestoneTim
             <div
               key={m.id}
               className="absolute"
-              style={{ left: `calc(${x}% + 16px)` }}
+              style={{ left: `calc(${x}% + 16px)`, top: 0, height: `${CONTAINER_H}px` }}
             >
               {/* Verbindungslinie */}
               <div

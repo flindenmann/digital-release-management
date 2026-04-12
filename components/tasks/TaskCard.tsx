@@ -1,5 +1,5 @@
 import { format } from "date-fns";
-import { AlertTriangle, Diamond, Folder, FolderOpen } from "lucide-react";
+import { AlertTriangle, Diamond, Folder, FolderOpen, ArrowRightToLine, ArrowLeftToLine, MessageSquare } from "lucide-react";
 import { StatusBadge } from "./StatusBadge";
 import type { Task, TaskAssignee, ResourceSnapshot, ApplicationSnapshot, TaskStatus } from "@prisma/client";
 
@@ -7,13 +7,14 @@ type TaskWithRelations = Task & {
   applicationSnapshot: Pick<ApplicationSnapshot, "name" | "prefix">;
   assignees: (TaskAssignee & { resourceSnapshot: Pick<ResourceSnapshot, "id" | "firstName" | "lastName" | "email"> })[];
   _count: { comments: number; attachments: number };
+  predecessors?: { predecessorId: string; predecessor: { id: string; key: string; startAt: string | null; endAt: string | null } }[];
+  successors?: { successorId: string; successor: { id: string; key: string } }[];
 };
 
 interface TaskCardProps {
   task: TaskWithRelations;
   isInvalid?: boolean;
   onClick?: () => void;
-  // Sammeltask-spezifische Props
   isChild?: boolean;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
@@ -44,7 +45,6 @@ export function TaskCard({
 }: TaskCardProps) {
   const isSummaryTask = task.isSummaryTask;
 
-  // Für Sammeltasks: berechnete Zeiten verwenden
   const effectiveStartAt = isSummaryTask ? (computedStartAt ?? null) : task.startAt;
   const effectiveEndAt   = isSummaryTask ? (computedEndAt   ?? null) : task.endAt;
 
@@ -67,12 +67,22 @@ export function TaskCard({
           .join(", ")
       : "–";
 
-  // Hintergrundfarbe
+  const predecessors     = task.predecessors ?? [];
+  const successors       = task.successors ?? [];
+  const predecessorCount = predecessors.length;
+  const successorCount   = successors.length;
+  const commentCount     = task._count.comments ?? 0;
+
+  const predecessorTooltip = predecessorCount === 0 ? "" :
+    `${predecessorCount} Vorgänger: ${predecessors.map((d) => d.predecessor.key).join(", ")}`;
+  const successorTooltip = successorCount === 0 ? "" :
+    `${successorCount} Nachfolger: ${successors.map((d) => d.successor.key).join(", ")}`;
+
   let rowClass = "border-b cursor-pointer transition-colors ";
   if (isSummaryTask) {
-    rowClass += "bg-gray-100/70 hover:bg-gray-200/70 dark:bg-gray-800/50 dark:hover:bg-gray-800/70 font-medium";
+    rowClass += "bg-gray-200/80 hover:bg-gray-300/80 dark:bg-gray-700/60 dark:hover:bg-gray-700/80 font-medium";
   } else if (task.isMilestone) {
-    rowClass += "bg-yellow-50/30 hover:bg-yellow-100/40 dark:bg-yellow-900/10 dark:hover:bg-yellow-900/20";
+    rowClass += "bg-blue-50 hover:bg-blue-100/80 dark:bg-blue-900/20 dark:hover:bg-blue-900/30";
   } else {
     rowClass += "hover:bg-muted/50";
   }
@@ -94,17 +104,11 @@ export function TaskCard({
           {isSummaryTask && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleExpand?.();
-              }}
+              onClick={(e) => { e.stopPropagation(); onToggleExpand?.(); }}
               className="shrink-0 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               title={isExpanded ? "Zugehörige Tasks ausblenden" : "Zugehörige Tasks anzeigen"}
             >
-              {isExpanded
-                ? <FolderOpen className="h-3.5 w-3.5" />
-                : <Folder className="h-3.5 w-3.5" />
-              }
+              {isExpanded ? <FolderOpen className="h-3.5 w-3.5" /> : <Folder className="h-3.5 w-3.5" />}
             </button>
           )}
         </span>
@@ -112,18 +116,56 @@ export function TaskCard({
       <td className="py-2 px-3 text-sm font-bold whitespace-nowrap">{date}</td>
       <td className="py-2 px-3 text-sm font-bold whitespace-nowrap">{startTime}</td>
       <td className="py-2 px-3 text-sm font-bold whitespace-nowrap">{endTime}</td>
-      <td className="py-2 px-3 text-sm whitespace-nowrap">
-        {duration}
+      <td className="py-2 px-3 text-sm whitespace-nowrap">{duration}</td>
+      <td className="py-2 px-3 text-sm truncate">{task.title}</td>
+
+      {/* Vorgänger */}
+      <td className="py-2 px-3 text-center whitespace-nowrap">
+        {predecessorCount > 0 ? (
+          <span
+            title={predecessorTooltip}
+            className="inline-flex items-center justify-center gap-0.5 text-muted-foreground"
+          >
+            <ArrowRightToLine className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs leading-none">{predecessorCount}</span>
+          </span>
+        ) : null}
       </td>
-      <td className="py-2 px-3 text-sm">{task.title}</td>
-      {/* Applikation: bei Sammeltask leer (Kinder können verschiedene haben) */}
-      <td className="py-2 px-3 text-sm whitespace-nowrap max-w-[160px] truncate">
+
+      {/* Nachfolger */}
+      <td className="py-2 px-3 text-center whitespace-nowrap">
+        {successorCount > 0 ? (
+          <span
+            title={successorTooltip}
+            className="inline-flex items-center justify-center gap-0.5 text-muted-foreground"
+          >
+            <ArrowLeftToLine className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs leading-none">{successorCount}</span>
+          </span>
+        ) : null}
+      </td>
+
+      {/* Kommentare */}
+      <td className="py-2 px-3 text-center whitespace-nowrap">
+        {commentCount > 0 ? (
+          <span
+            title={`${commentCount} Kommentar${commentCount !== 1 ? "e" : ""}`}
+            className="inline-flex items-center justify-center gap-0.5 text-muted-foreground"
+          >
+            <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs leading-none">{commentCount}</span>
+          </span>
+        ) : null}
+      </td>
+
+      {/* Applikation: bei Sammeltask leer */}
+      <td className="py-2 px-3 text-sm whitespace-nowrap truncate">
         {isSummaryTask ? "" : task.applicationSnapshot.name}
       </td>
-      <td className="py-2 px-3 text-sm whitespace-nowrap max-w-[180px] truncate">
+      <td className="py-2 px-3 text-sm whitespace-nowrap truncate">
         {assignees}
       </td>
-      {/* Status: bei Sammeltask berechneter Minimal-Status der Kinder */}
+      {/* Status: bei Sammeltask berechneter Minimal-Status */}
       <td className="py-2 px-3 text-sm whitespace-nowrap">
         {isSummaryTask
           ? (computedStatus ? <StatusBadge status={computedStatus as TaskStatus} /> : "")

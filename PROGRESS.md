@@ -15,6 +15,19 @@
 - [x] Grafische Meilensteindarstellung mit horizontaler Zeitlinie
 - [x] Globale Benutzerverwaltung UI
 - [x] Globale Ressourcenverwaltung UI
-- [ ] Import- und Exportfunktionen Applikationsverwaltung (global)
-- [ ] Import- und Exportfunktionen Ressourcenverwaltung (global)
-
+- [x] Ressourcenverwaltung (global) Dialog anpassen. Momentan kann da nur eine Team-Zugehörigkeit angepasst werden. Im Dialog müssen sämtliche Attribute angepasst werden können. Analog dem Dialog im Release.
+- [x] Ich möchte die Benutzer- und Ressourcenverwaltung zusammenlegen. Es soll nur noch die Ressourcenverwaltung geben. Eine Ressource ist immer automatisch ein Benutzer. Wenn die Ressourcen sich das erste Mal anmeldet, dann kann sie wie bisher ein eigenes Passwort setzen.
+- [x] Ressourcenverwaltung Release: Es muss möglich sein, neue Ressourcen dem Release zuzuweisen. Analog den Applikationen.
+- [x] Teamverwaltung UI (global)
+- [x] In der Timelineansicht der Meilensteine sollen archivierte Meilensteine nicht angezeigt werden. Entferne den Typ "Archiviert" aus der grafischen Darstellung.
+- [x] Import- und Exportfunktionen Applikationsverwaltung (global)
+- [x] Import- und Exportfunktionen Ressourcenverwaltung (global)
+- [x] Import- und Exportfunktionen Teamverwaltung (global)
+- [x] Dashboard mit Fortschrittsübersicht (Zähler pro Task-Status pro Release, nächste Meilensteine)
+- [x] Audit-Log als History-Panel auf Tasks und Meilensteinen
+- [x] Task-Abhängigkeiten (Predecessor/Successor) im UI
+- [x] Task-Kommentare und Anhänge
+- [ ] Optimierung Task Dialog UI
+- [ ] Zoom-Möglichkeit (Zeitlinie grösser/kleiner) für Meilenstein-Timeline
+- [ ] Status direkt in der Liste setzen statt im Dialog
+- [ ] Icon für Applikation

@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { withErrorHandling } from "@/lib/api/withErrorHandling";
+import { requireGlobalAdmin } from "@/lib/api/requireGlobalAdmin";
 import { UnauthorizedError, ValidationError, ConflictError } from "@/lib/errors";
 import { CreateUserSchema } from "@/lib/validations/user";
 
@@ -11,6 +12,7 @@ import { CreateUserSchema } from "@/lib/validations/user";
 export const GET = withErrorHandling(async (_req: NextRequest) => {
   const session = await getServerSession(authOptions);
   if (!session) throw new UnauthorizedError();
+  await requireGlobalAdmin(session.user.id);
 
   const users = await prisma.user.findMany({
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
@@ -36,6 +38,7 @@ export const GET = withErrorHandling(async (_req: NextRequest) => {
 export const POST = withErrorHandling(async (req: NextRequest) => {
   const session = await getServerSession(authOptions);
   if (!session) throw new UnauthorizedError();
+  await requireGlobalAdmin(session.user.id);
 
   const body = await req.json();
   const result = CreateUserSchema.safeParse(body);
